@@ -1,0 +1,139 @@
+CREATE TABLE wishlist (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    id_pembeli INT NOT NULL,
+    id_produk INT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (id_pembeli) REFERENCES pembeli(id_pembeli) ON DELETE CASCADE,
+    FOREIGN KEY (id_produk) REFERENCES produk(id_produk) ON DELETE CASCADE
+);
+
+model:
+<?php
+defined('BASEPATH') OR exit('No direct script access allowed');
+
+class Wishlist_model extends CI_Model {
+
+    public function get_wishlist($id_pembeli) {
+        $this->db->select('wishlist.*, produk.nama_produk, produk.harga, produk.foto');
+        $this->db->from('wishlist');
+        $this->db->join('produk', 'produk.id_produk = wishlist.id_produk');
+        $this->db->where('wishlist.id_pembeli', $id_pembeli);
+        return $this->db->get()->result();
+    }
+
+    public function is_in_wishlist($id_pembeli, $id_produk) {
+        return $this->db->get_where('wishlist', [
+            'id_pembeli' => $id_pembeli,
+            'id_produk' => $id_produk
+        ])->row();
+    }
+
+    public function add_to_wishlist($data) {
+        return $this->db->insert('wishlist', $data);
+    }
+
+    public function remove_from_wishlist($id_pembeli, $id_produk) {
+        $this->db->where('id_pembeli', $id_pembeli);
+        $this->db->where('id_produk', $id_produk);
+        return $this->db->delete('wishlist');
+    }
+}
+
+controller:
+<?php
+defined('BASEPATH') OR exit('No direct script access allowed');
+
+class Wishlist extends CI_Controller {
+
+    public function __construct() {
+        parent::__construct();
+        $this->load->model('Wishlist_model');
+        $this->load->model('Produk_model');
+        $this->load->library('session');
+    }
+
+    public function index() {
+        $id_pembeli = $this->session->userdata('id_pembeli');
+        if (!$id_pembeli) redirect('auth/login');
+
+        $data['wishlist'] = $this->Wishlist_model->get_wishlist($id_pembeli);
+        $this->load->view('wishlist/index', $data);
+    }
+
+    public function add($id_produk) {
+        $id_pembeli = $this->session->userdata('id_pembeli');
+        if (!$id_pembeli) redirect('auth/login');
+
+        if (!$this->Wishlist_model->is_in_wishlist($id_pembeli, $id_produk)) {
+            $this->Wishlist_model->add_to_wishlist([
+                'id_pembeli' => $id_pembeli,
+                'id_produk' => $id_produk
+            ]);
+        }
+        redirect('wishlist');
+    }
+
+    public function remove($id_produk) {
+        $id_pembeli = $this->session->userdata('id_pembeli');
+        $this->Wishlist_model->remove_from_wishlist($id_pembeli, $id_produk);
+        redirect('wishlist');
+    }
+}
+
+
+view:
+<h3>Daftar Wishlist</h3>
+<?php if (empty($wishlist)): ?>
+    <p>Tidak ada produk di wishlist Anda.</p>
+<?php else: ?>
+    <div class="row">
+    <?php foreach ($wishlist as $item): ?>
+        <div class="col-md-3 mb-3">
+            <div class="card">
+                <img src="<?= base_url('assets/uploads/produk/' . $item->foto) ?>" class="card-img-top">
+                <div class="card-body">
+                    <h5 class="card-title"><?= $item->nama_produk ?></h5>
+                    <p class="card-text">Rp <?= number_format($item->harga) ?></p>
+                    <a href="<?= site_url('wishlist/remove/' . $item->id_produk) ?>" class="btn btn-danger btn-sm">Hapus</a>
+                </div>
+            </div>
+        </div>
+    <?php endforeach; ?>
+    </div>
+<?php endif; ?>
+
+
+views:
+<h3 class="mb-4">Daftar Wishlist Saya</h3>
+
+<?php if (empty($wishlist)): ?>
+    <div class="alert alert-info text-center">
+        Tidak ada produk di wishlist Anda.
+    </div>
+<?php else: ?>
+    <div class="row">
+    <?php foreach ($wishlist as $produk): ?>
+        <div class="col-md-3 mb-4">
+            <div class="card h-100 shadow-sm">
+                <div class="text-center p-3">
+                    <img src="<?= base_url('uploads/pembeli/produk/' . $produk->foto) ?>" 
+                         class="product-image img-fluid" 
+                         alt="<?= $produk->nama_produk ?>" 
+                         style="max-height: 180px; object-fit: contain;">
+                </div>
+                <div class="card-body text-center">
+                    <h6 class="card-title"><?= $produk->nama_produk ?></h6>
+                    <p class="text-muted">Rp <?= number_format($produk->harga, 0, ',', '.') ?></p>
+                </div>
+                <div class="card-footer text-center bg-white border-top-0">
+                    <a href="<?= site_url('wishlist/remove/' . $produk->id_produk) ?>" 
+                       class="btn btn-sm btn-danger">
+                        <i class="bi bi-trash"></i> Hapus
+                    </a>
+                </div>
+            </div>
+        </div>
+    <?php endforeach; ?>
+    </div>
+<?php endif; ?>
+
